@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en-us">
+
+<head>
+<meta charset="utf-8" />
+<meta name="author" content="" />
+<meta name="description" content="" />
+<meta name="keywords" content="" />
+<meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1">
+<meta name="generator" content="Hugo 0.61.0" />
+
+<link rel="canonical" href="https://jarijaas.github.io/posts/nixu-2018/ssobey/">
+<meta property="og:title" content="SSObey" />
+<meta property="og:description" content="" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://jarijaas.github.io/posts/nixu-2018/ssobey/" />
+<meta property="article:published_time" content="2019-12-21T00:00:00+00:00" />
+<meta property="article:modified_time" content="2019-12-21T00:00:00+00:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="SSObey"/>
+<meta name="twitter:description" content=""/>
+
+
+<meta itemprop="name" content="SSObey">
+<meta itemprop="description" content="">
+<meta itemprop="datePublished" content="2019-12-21T00:00:00&#43;00:00" />
+<meta itemprop="dateModified" content="2019-12-21T00:00:00&#43;00:00" />
+<meta itemprop="wordCount" content="446">
+
+
+
+<meta itemprop="keywords" content="Nixu,2018,web,reversing," />
+
+<link rel="stylesheet" href="/css/layout.css" />
+
+
+<link rel="stylesheet" href="/css/default-dark.css" />
+
+
+
+
+<title>
+
+
+     SSObey 
+
+</title>
+
+</head>
+
+
+<body>
+<div class="main">
+<header>
+
+<div class="header-bar">
+
+  <nav>
+    <div class="siteTitle">
+      <a href="https://jarijaas.github.io/">CTF writeups</a>
+    </div> 
+
+    
+    
+
+  </nav>
+
+  
+<div class="social-links-header">
+
+  
+
+  
+
+  
+
+  
+
+  
+
+</div>
+
+
+</div>
+
+
+</header>
+
+
+<article class="post">
+    <h1 class="title"> SSObey </h1>
+    <div class="content"> <p><img src="img/2019-12-21-23-08-00.png" alt=""></p>
+<p><img src="img/2019-12-21-23-16-47.png" alt=""></p>
+<p>The website providers the server code (See the <code>Powered by SSObey</code> link).
+It seems to be python 3 pex archive, it can be extracted using 7zip.</p>
+<p>Decompiling <code>pyc</code> files:</p>
+<pre><code>uncompyle6 .\sso_client\.deps\ssobey-20180117-py3-none-any.whl\ssobey\config_example.pyc &gt; decompiled/ssobey/config_example.py
+uncompyle6 .\sso_client\.deps\ssobey-20180117-py3-none-any.whl\ssobey\util.pyc &gt; decompiled/ssobey/util.py
+uncompyle6 .\sso_client\.deps\ssobey-20180117-py3-none-any.whl\ssobey\web.pyc &gt; decompiled/ssobey/web.py
+</code></pre><p>The most important src files are <code>web.py</code> and <code>utils.py</code>.</p>
+<p><code>utils.py</code>:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">SCRAMBLE_KEY <span style="color:#f92672">=</span> <span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">CgEZBz4vSHDK</span><span style="color:#e6db74">&#39;</span><span style="color:#f92672">.</span>encode()
+
+<span style="color:#66d9ef">def</span> <span style="color:#a6e22e">xor</span>(plaintext, key):
+    r <span style="color:#f92672">=</span> []
+    <span style="color:#66d9ef">for</span> x, y <span style="color:#f92672">in</span> zip(plaintext, key):
+        r<span style="color:#f92672">.</span>append(x <span style="color:#f92672">^</span> y)
+
+    <span style="color:#66d9ef">return</span> bytes(r)
+
+
+<span style="color:#66d9ef">def</span> <span style="color:#a6e22e">obey_the_signature</span>(data):
+    secret <span style="color:#f92672">=</span> xor(binascii<span style="color:#f92672">.</span>hexlify(app<span style="color:#f92672">.</span>config[<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">SSO_SECRET</span><span style="color:#e6db74">&#39;</span>]), SCRAMBLE_KEY)
+    proof <span style="color:#f92672">=</span> hashlib<span style="color:#f92672">.</span>sha256(secret <span style="color:#f92672">+</span> data)<span style="color:#f92672">.</span>hexdigest()
+    <span style="color:#66d9ef">return</span> proof
+
+
+<span style="color:#66d9ef">def</span> <span style="color:#a6e22e">calc_sso_token</span>(user):
+    proof <span style="color:#f92672">=</span> obey_the_signature(user<span style="color:#f92672">.</span>encode())
+    tok <span style="color:#f92672">=</span> json<span style="color:#f92672">.</span>dumps({<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">user</span><span style="color:#e6db74">&#39;</span>: user, <span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">proof</span><span style="color:#e6db74">&#39;</span>: proof})
+    <span style="color:#66d9ef">return</span> base64<span style="color:#f92672">.</span>urlsafe_b64encode(tok<span style="color:#f92672">.</span>encode())
+
+
+<span style="color:#66d9ef">def</span> <span style="color:#a6e22e">is_blacklisted</span>(user):
+    <span style="color:#66d9ef">for</span> blacklisted <span style="color:#f92672">in</span> app<span style="color:#f92672">.</span>config[<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">BLACKLIST</span><span style="color:#e6db74">&#39;</span>]:
+        <span style="color:#66d9ef">if</span> user <span style="color:#f92672">==</span> blacklisted[<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">user</span><span style="color:#e6db74">&#39;</span>]:
+            <span style="color:#66d9ef">return</span> True
+
+    <span style="color:#66d9ef">return</span> False
+
+
+<span style="color:#66d9ef">def</span> <span style="color:#a6e22e">verify_sso_token</span>(tok):
+    dt <span style="color:#f92672">=</span> base64<span style="color:#f92672">.</span>urlsafe_b64decode(tok)
+    jt <span style="color:#f92672">=</span> json<span style="color:#f92672">.</span>loads(dt)
+    <span style="color:#66d9ef">if</span> is_blacklisted(jt[<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">user</span><span style="color:#e6db74">&#39;</span>]):
+        <span style="color:#66d9ef">return</span> abort(<span style="color:#ae81ff">500</span>, <span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">This user is blacklisted</span><span style="color:#e6db74">&#39;</span>)
+    wantsig <span style="color:#f92672">=</span> obey_the_signature(jt[<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">user</span><span style="color:#e6db74">&#39;</span>]<span style="color:#f92672">.</span>encode())
+    recvsig <span style="color:#f92672">=</span> jt[<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">proof</span><span style="color:#e6db74">&#39;</span>]
+    <span style="color:#66d9ef">if</span> wantsig <span style="color:#f92672">!=</span> recvsig:
+        <span style="color:#66d9ef">return</span> abort(<span style="color:#ae81ff">500</span>, <span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">Incorrect SSObey token</span><span style="color:#e6db74">&#39;</span>)
+    <span style="color:#66d9ef">return</span> jt
+</code></pre></div><p><code>web.py</code>:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#f92672">.</span><span style="color:#f92672">.</span><span style="color:#f92672">.</span>
+<span style="color:#a6e22e">@app.route</span>(<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">/</span><span style="color:#e6db74">&#39;</span>, methods<span style="color:#f92672">=</span>[<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">GET</span><span style="color:#e6db74">&#39;</span>, <span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">POST</span><span style="color:#e6db74">&#39;</span>])
+<span style="color:#66d9ef">def</span> <span style="color:#a6e22e">login</span>():
+    <span style="color:#66d9ef">if</span> request<span style="color:#f92672">.</span>method <span style="color:#f92672">==</span> <span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">GET</span><span style="color:#e6db74">&#39;</span>:
+        <span style="color:#66d9ef">return</span> render_template(<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">index.html</span><span style="color:#e6db74">&#39;</span>)
+    username, password <span style="color:#f92672">=</span> request<span style="color:#f92672">.</span>form[<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">username</span><span style="color:#e6db74">&#39;</span>], request<span style="color:#f92672">.</span>form[<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">password</span><span style="color:#e6db74">&#39;</span>]
+    <span style="color:#66d9ef">if</span> is_blacklisted(username):
+        flash(<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">This user is blacklisted.</span><span style="color:#e6db74">&#39;</span>, <span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">danger</span><span style="color:#e6db74">&#39;</span>)
+        <span style="color:#66d9ef">return</span> render_template(<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">index.html</span><span style="color:#e6db74">&#39;</span>)
+    okpass <span style="color:#f92672">=</span> app<span style="color:#f92672">.</span>config[<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">USERS</span><span style="color:#e6db74">&#39;</span>]<span style="color:#f92672">.</span>get(username)
+    <span style="color:#66d9ef">if</span> okpass <span style="color:#f92672">is</span> None:
+        flash(<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">User does not exist.</span><span style="color:#e6db74">&#39;</span>, <span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">danger</span><span style="color:#e6db74">&#39;</span>)
+        <span style="color:#66d9ef">return</span> render_template(<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">index.html</span><span style="color:#e6db74">&#39;</span>)
+    <span style="color:#66d9ef">if</span> okpass <span style="color:#f92672">!=</span> password:
+        flash(<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">Wrong password.</span><span style="color:#e6db74">&#39;</span>, <span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">danger</span><span style="color:#e6db74">&#39;</span>)
+        <span style="color:#66d9ef">return</span> render_template(<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">index.html</span><span style="color:#e6db74">&#39;</span>)
+    tok <span style="color:#f92672">=</span> calc_sso_token(username)
+    retaddr <span style="color:#f92672">=</span> request<span style="color:#f92672">.</span>args<span style="color:#f92672">.</span>get(<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">returnTo</span><span style="color:#e6db74">&#39;</span>)
+    <span style="color:#66d9ef">if</span> retaddr:
+        u <span style="color:#f92672">=</span> url_parse(retaddr)
+        q <span style="color:#f92672">=</span> u<span style="color:#f92672">.</span>decode_query()
+        q[<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">ssobey_token</span><span style="color:#e6db74">&#39;</span>] <span style="color:#f92672">=</span> tok
+        nu <span style="color:#f92672">=</span> u<span style="color:#f92672">.</span>replace(query<span style="color:#f92672">=</span>url_encode(q))
+        <span style="color:#66d9ef">return</span> redirect(nu<span style="color:#f92672">.</span>to_url())
+    flash(<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">Ok, now what, no return url...</span><span style="color:#e6db74">&#39;</span>, <span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">warning</span><span style="color:#e6db74">&#39;</span>)
+    <span style="color:#66d9ef">return</span> render_template(<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">index.html</span><span style="color:#e6db74">&#39;</span>)
+
+
+<span style="color:#a6e22e">@app.route</span>(<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">/.blacklist</span><span style="color:#e6db74">&#39;</span>)
+<span style="color:#66d9ef">def</span> <span style="color:#a6e22e">blacklist</span>():
+    <span style="color:#66d9ef">return</span> jsonify(app<span style="color:#f92672">.</span>config[<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">BLACKLIST</span><span style="color:#e6db74">&#39;</span>])
+
+<span style="color:#a6e22e">@app.route</span>(<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">/test</span><span style="color:#e6db74">&#39;</span>)
+<span style="color:#66d9ef">def</span> <span style="color:#a6e22e">test</span>():
+    uid <span style="color:#f92672">=</span> session<span style="color:#f92672">.</span>get(<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">uid</span><span style="color:#e6db74">&#39;</span>)
+    <span style="color:#66d9ef">if</span> uid <span style="color:#f92672">is</span> None:
+        tok <span style="color:#f92672">=</span> request<span style="color:#f92672">.</span>args<span style="color:#f92672">.</span>get(<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">ssobey_token</span><span style="color:#e6db74">&#39;</span>)
+        <span style="color:#66d9ef">if</span> tok <span style="color:#f92672">is</span> None:
+            <span style="color:#66d9ef">return</span> redirect(url_for(<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">.login</span><span style="color:#e6db74">&#39;</span>, returnTo<span style="color:#f92672">=</span>url_for(<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">.test</span><span style="color:#e6db74">&#39;</span>, _external<span style="color:#f92672">=</span>True)))
+        authinfo <span style="color:#f92672">=</span> verify_sso_token(tok)
+        session[<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">uid</span><span style="color:#e6db74">&#39;</span>] <span style="color:#f92672">=</span> authinfo[<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">user</span><span style="color:#e6db74">&#39;</span>]
+        <span style="color:#66d9ef">return</span> redirect(url_for(<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">.test</span><span style="color:#e6db74">&#39;</span>))
+    <span style="color:#66d9ef">return</span> render_template(<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">test.html</span><span style="color:#e6db74">&#39;</span>, uid<span style="color:#f92672">=</span>uid, flag<span style="color:#f92672">=</span>app<span style="color:#f92672">.</span>config[<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">FLAG</span><span style="color:#e6db74">&#39;</span>])
+</code></pre></div><p>The <code>http://ssobey.thenixuchallenge.com/.blacklist</code>
+provides the tokens for blacklisted users:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json">[
+  {
+    <span style="color:#f92672">&#34;token&#34;</span>: <span style="color:#e6db74">&#34;eyJ1c2VyIjogInRlc3QiLCAicHJvb2YiOiAiNTFiNmY0NDJlMDMzNjRlM2JkMDZkZDQxODYwYmU3NDM0MmExMGUwNDhiNmE3Y2NkZDFjNzcxMWQ0ODM3MzYwZSJ9&#34;</span>, 
+    <span style="color:#f92672">&#34;user&#34;</span>: <span style="color:#e6db74">&#34;test&#34;</span>
+  }
+]
+</code></pre></div><p>Because we know the <code>SCRAMBLE_KEY</code>, username and the <code>proof</code> hash for the blacklisted <code>test</code> user,
+the sso secret can be brute-forced:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">
+<span style="color:#f92672">import</span> base64<span style="color:#f92672">,</span> hashlib<span style="color:#f92672">,</span> binascii
+<span style="color:#f92672">import</span> json
+
+SCRAMBLE_KEY <span style="color:#f92672">=</span> <span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">CgEZBz4vSHDK</span><span style="color:#e6db74">&#39;</span><span style="color:#f92672">.</span>encode()
+
+<span style="color:#66d9ef">def</span> <span style="color:#a6e22e">xor</span>(plaintext, key):
+    r <span style="color:#f92672">=</span> []
+    <span style="color:#66d9ef">for</span> x, y <span style="color:#f92672">in</span> zip(plaintext, key):
+        r<span style="color:#f92672">.</span>append(x <span style="color:#f92672">^</span> y)
+
+    <span style="color:#66d9ef">return</span> bytes(r)
+
+
+<span style="color:#66d9ef">def</span> <span style="color:#a6e22e">test_secret</span>(pwd):
+    secret <span style="color:#f92672">=</span> xor(binascii<span style="color:#f92672">.</span>hexlify(pwd), SCRAMBLE_KEY)
+    proof <span style="color:#f92672">=</span> hashlib<span style="color:#f92672">.</span>sha256(secret <span style="color:#f92672">+</span> <span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">test</span><span style="color:#e6db74">&#39;</span><span style="color:#f92672">.</span>encode())<span style="color:#f92672">.</span>hexdigest()
+    <span style="color:#66d9ef">return</span> proof <span style="color:#f92672">==</span> <span style="color:#e6db74"></span><span style="color:#e6db74">&#34;</span><span style="color:#e6db74">51b6f442e03364e3bd06dd41860be74342a10e048b6a7ccdd1c7711d4837360e</span><span style="color:#e6db74">&#34;</span>
+
+
+<span style="color:#66d9ef">with</span> open(<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">/usr/share/wordlists/rockyou.txt</span><span style="color:#e6db74">&#39;</span>, <span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">rb</span><span style="color:#e6db74">&#39;</span>) <span style="color:#66d9ef">as</span> f:
+  <span style="color:#66d9ef">while</span> True:
+    pwd <span style="color:#f92672">=</span> f<span style="color:#f92672">.</span>readline()[:<span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>]
+    <span style="color:#66d9ef">if</span> <span style="color:#f92672">not</span> pwd:
+      <span style="color:#66d9ef">break</span>
+
+    <span style="color:#66d9ef">print</span>(<span style="color:#e6db74"></span><span style="color:#e6db74">&#34;</span><span style="color:#e6db74">%s</span><span style="color:#e6db74">&#34;</span> <span style="color:#f92672">%</span> pwd)
+    <span style="color:#66d9ef">if</span> test_secret(pwd):
+      <span style="color:#66d9ef">print</span>(<span style="color:#e6db74"></span><span style="color:#e6db74">&#34;</span><span style="color:#e6db74">Found secret: </span><span style="color:#e6db74">&#34;</span>, pwd)
+      exit(<span style="color:#ae81ff">0</span>)
+</code></pre></div><p>The sso secret is <code>3668301</code>.
+Forging the token (the token has to be valid to get the flag, username does not matter):</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#f92672">import</span> base64<span style="color:#f92672">,</span> hashlib<span style="color:#f92672">,</span> binascii
+<span style="color:#f92672">import</span> json
+
+SCRAMBLE_KEY <span style="color:#f92672">=</span> <span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">CgEZBz4vSHDK</span><span style="color:#e6db74">&#39;</span><span style="color:#f92672">.</span>encode()
+SSO_SECRET <span style="color:#f92672">=</span> <span style="color:#e6db74"></span><span style="color:#e6db74">&#34;</span><span style="color:#e6db74">3668301</span><span style="color:#e6db74">&#34;</span><span style="color:#f92672">.</span>encode()
+
+<span style="color:#66d9ef">def</span> <span style="color:#a6e22e">xor</span>(plaintext, key):
+    r <span style="color:#f92672">=</span> []
+    <span style="color:#66d9ef">for</span> x, y <span style="color:#f92672">in</span> zip(plaintext, key):
+        r<span style="color:#f92672">.</span>append(x <span style="color:#f92672">^</span> y)
+
+    <span style="color:#66d9ef">return</span> bytes(r)
+
+<span style="color:#66d9ef">def</span> <span style="color:#a6e22e">obey_the_signature</span>(data):
+    secret <span style="color:#f92672">=</span> xor(binascii<span style="color:#f92672">.</span>hexlify(SSO_SECRET), SCRAMBLE_KEY)
+    proof <span style="color:#f92672">=</span> hashlib<span style="color:#f92672">.</span>sha256(secret <span style="color:#f92672">+</span> data)<span style="color:#f92672">.</span>hexdigest()
+    <span style="color:#66d9ef">return</span> proof
+
+<span style="color:#66d9ef">def</span> <span style="color:#a6e22e">calc_sso_token</span>(user):
+    proof <span style="color:#f92672">=</span> obey_the_signature(user<span style="color:#f92672">.</span>encode())<span style="color:#f92672">+</span>
+    tok <span style="color:#f92672">=</span> json<span style="color:#f92672">.</span>dumps({<span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">user</span><span style="color:#e6db74">&#39;</span>: user, <span style="color:#e6db74"></span><span style="color:#e6db74">&#39;</span><span style="color:#e6db74">proof</span><span style="color:#e6db74">&#39;</span>: proof})
+    <span style="color:#66d9ef">return</span> base64<span style="color:#f92672">.</span>urlsafe_b64encode(tok<span style="color:#f92672">.</span>encode())
+
+<span style="color:#66d9ef">print</span>(<span style="color:#e6db74"></span><span style="color:#e6db74">&#34;</span><span style="color:#e6db74">Token: </span><span style="color:#e6db74">%s</span><span style="color:#e6db74">&#34;</span> <span style="color:#f92672">%</span> calc_sso_token(<span style="color:#e6db74"></span><span style="color:#e6db74">&#34;</span><span style="color:#e6db74">test2</span><span style="color:#e6db74">&#34;</span>))
+</code></pre></div><p><img src="img/2019-12-21-23-09-36.png" alt=""></p> </div>
+    <footer class="post-footer">
+
+  <div class="post-footer-data">
+    
+<div class="tags">
+    
+      <div class="tag">
+        <a href="/tags/nixu">#Nixu</a>
+      </div>
+    
+      <div class="tag">
+        <a href="/tags/2018">#2018</a>
+      </div>
+    
+      <div class="tag">
+        <a href="/tags/web">#web</a>
+      </div>
+    
+      <div class="tag">
+        <a href="/tags/reversing">#reversing</a>
+      </div>
+    
+</div>
+
+    <div class="date"> 21 Dec 2019 </div>
+  </div>
+</footer>
+
+
+
+</article>
+
+  <footer>
+
+  <div class="social-links-footer">
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  <div class="social-link">
+  <a href="https://jarijaas.github.io/index.xml" target="_blank">RSS</a>
+  </div>
+
+</div>
+
+
+  <div class="copyright">  </div>
+
+  <div class="poweredby">
+    Powered by <a href="https://gohugo.io/">Hugo</a>.
+  </div>
+
+  </footer>
+
+</div> 
+
+</body>
+</html>
+
