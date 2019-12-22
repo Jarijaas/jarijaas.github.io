@@ -1,1 +1,199 @@
-<!doctype html><html lang=en-us><head><meta charset=utf-8><meta name=author content><meta name=description content><meta name=keywords content><meta name=viewport content="width=device-width,minimum-scale=1,initial-scale=1"><meta name=generator content="Hugo 0.61.0"><link rel=canonical href=https://jarijaas.github.io/posts/><meta property="og:title" content="Posts"><meta property="og:description" content><meta property="og:type" content="website"><meta property="og:url" content="https://jarijaas.github.io/posts/"><meta property="og:updated_time" content="2019-12-21T00:00:00+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="Posts"><meta name=twitter:description content><meta itemprop=name content="Posts"><meta itemprop=description content><link rel=stylesheet href=https://jarijaas.github.io/css/layout.css><meta name=google-site-verification content="nu0v-SCw_KrBgDmtYoXUOIcoA61aEw2YLQ7PxQoS2QM"><link rel=stylesheet href=https://jarijaas.github.io/css/default-dark.css><script type=application/ld+json>{"@context":"http://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https:\/\/jarijaas.github.io\/"},"articleSection":"posts","name":"Posts","headline":"Posts","description":"","inLanguage":"en-US","author":"","creator":"","publisher":"","accountablePerson":"","copyrightHolder":"","copyrightYear":"2019","datePublished":"2019-12-21 00:00:00 \x2b0000 UTC","dateModified":"2019-12-21 00:00:00 \x2b0000 UTC","url":"https:\/\/jarijaas.github.io\/posts\/","wordCount":"0","keywords":["Blog"]}</script><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-154923689-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script><title>Posts</title></head><body><div class=main><header><div class=header-bar><nav><div class=siteTitle><a href=https://jarijaas.github.io/>CTF writeups</a></div></nav><div class=social-links-header></div></div></header><h2 class=content-list-title><a href=https://jarijaas.github.io/posts/ class=linktopost>Posts</a></h2><div class=content-list><div class=content-item><a href=https://jarijaas.github.io/posts/nixu-2018/ssobey/><div class=post-list><h3 class=title>SSObey</h3></div></a><div class=meta><div class=tags><div class=tag><a href=https://jarijaas.github.io/tags/nixu>#Nixu</a></div><div class=tag><a href=https://jarijaas.github.io/tags/2018>#2018</a></div><div class=tag><a href=https://jarijaas.github.io/tags/web>#web</a></div><div class=tag><a href=https://jarijaas.github.io/tags/reversing>#reversing</a></div></div><div class=date>21 Dec, 2019</div></div></div><footer><div class=social-links-footer><div class=social-link><a href=https://jarijaas.github.io/index.xml target=_blank>RSS</a></div></div><div class=copyright></div><div class=poweredby>Powered by <a href=https://gohugo.io/>Hugo</a>.</div></footer></div></body></html>
+<!DOCTYPE html>
+<html lang="en-us">
+
+<head>
+<meta charset="utf-8" />
+<meta name="author" content="" />
+<meta name="description" content="" />
+<meta name="keywords" content="" />
+<meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1">
+<meta name="generator" content="Hugo 0.61.0" />
+
+<link rel="canonical" href="https://jarijaas.github.io/posts/">
+<meta property="og:title" content="Posts" />
+<meta property="og:description" content="" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://jarijaas.github.io/posts/" />
+<meta property="og:updated_time" content="2019-12-21T00:00:00+00:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="Posts"/>
+<meta name="twitter:description" content=""/>
+
+
+<meta itemprop="name" content="Posts">
+<meta itemprop="description" content="">
+
+<link rel="stylesheet" href="https://jarijaas.github.io/css/layout.css" />
+
+<meta name="google-site-verification" content="nu0v-SCw_KrBgDmtYoXUOIcoA61aEw2YLQ7PxQoS2QM" />
+
+
+<link rel="stylesheet" href="https://jarijaas.github.io/css/default-dark.css" />
+
+
+<script type="application/ld+json">
+  {
+      "@context" : "http://schema.org",
+      "@type" : "BlogPosting",
+      "mainEntityOfPage": {
+           "@type": "WebPage",
+           "@id": "https:\/\/jarijaas.github.io\/"
+      },
+      "articleSection" : "posts",
+      "name" : "Posts",
+      "headline" : "Posts",
+      "description" : "",
+      "inLanguage" : "en-US",
+      "author" : "",
+      "creator" : "",
+      "publisher": "",
+      "accountablePerson" : "",
+      "copyrightHolder" : "",
+      "copyrightYear" : "2019",
+      "datePublished": "2019-12-21 00:00:00 \x2b0000 UTC",
+      "dateModified" : "2019-12-21 00:00:00 \x2b0000 UTC",
+      "url" : "https:\/\/jarijaas.github.io\/posts\/",
+      "wordCount" : "0",
+      "keywords" : [ "Blog" ]
+  }
+  </script>
+  
+
+
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-154923689-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+
+<title>
+
+
+     Posts 
+
+</title>
+
+</head>
+
+
+<body>
+<div class="main">
+<header>
+
+<div class="header-bar">
+
+  <nav>
+    <div class="siteTitle">
+      <a href="https://jarijaas.github.io/">CTF writeups</a>
+    </div> 
+
+    
+    
+
+  </nav>
+
+  
+<div class="social-links-header">
+
+  
+
+  
+
+  
+
+  
+
+  
+
+</div>
+
+
+</div>
+
+
+</header>
+
+
+<h2 class="content-list-title">
+    <a href="https://jarijaas.github.io/posts/" class="linktopost">Posts</a>
+</h2>
+
+<div class="content-list">
+
+  
+  <div class="content-item">
+
+    <a href="https://jarijaas.github.io/posts/nixu-2018/ssobey/">
+      <div class="post-list"> <h3 class="title"> SSObey </h3> </div>
+    </a>
+    <div class="meta">
+      
+<div class="tags">
+    
+      <div class="tag">
+        <a href="https://jarijaas.github.io/tags/nixu">#Nixu</a>
+      </div>
+    
+      <div class="tag">
+        <a href="https://jarijaas.github.io/tags/2018">#2018</a>
+      </div>
+    
+      <div class="tag">
+        <a href="https://jarijaas.github.io/tags/web">#web</a>
+      </div>
+    
+      <div class="tag">
+        <a href="https://jarijaas.github.io/tags/reversing">#reversing</a>
+      </div>
+    
+</div>
+
+      <div class="date"> 21 Dec, 2019 </div>
+    </div>
+</div>
+
+  
+
+
+
+  <footer>
+
+  <div class="social-links-footer">
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  <div class="social-link">
+  <a href="https://jarijaas.github.io/index.xml" target="_blank">RSS</a>
+  </div>
+
+</div>
+
+
+  <div class="copyright">  </div>
+
+  <div class="poweredby">
+    Powered by <a href="https://gohugo.io/">Hugo</a>.
+  </div>
+
+  </footer>
+
+</div> 
+
+</body>
+</html>
+
