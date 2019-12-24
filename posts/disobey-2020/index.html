@@ -1,0 +1,230 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta name=author content><meta name=description content><meta name=keywords content><meta name=viewport content="width=device-width,minimum-scale=1,initial-scale=1"><meta name=generator content="Hugo 0.61.0"><link rel=canonical href=https://jarijaas.github.io/posts/disobey-2020/><meta property="og:title" content="Solving the Disobey 2020 puzzle bootloader using Unicorn and Ghidra"><meta property="og:description" content><meta property="og:type" content="article"><meta property="og:url" content="https://jarijaas.github.io/posts/disobey-2020/"><meta property="article:published_time" content="2019-12-24T00:00:00+00:00"><meta property="article:modified_time" content="2019-12-24T00:00:00+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="Solving the Disobey 2020 puzzle bootloader using Unicorn and Ghidra"><meta name=twitter:description content><meta itemprop=name content="Solving the Disobey 2020 puzzle bootloader using Unicorn and Ghidra"><meta itemprop=description content><meta itemprop=datePublished content="2019-12-24T00:00:00+00:00"><meta itemprop=dateModified content="2019-12-24T00:00:00+00:00"><meta itemprop=wordCount content="1181"><meta itemprop=keywords content="Disobey,2020,reversing,"><link rel=stylesheet href=https://jarijaas.github.io/css/layout.css><meta name=google-site-verification content="nu0v-SCw_KrBgDmtYoXUOIcoA61aEw2YLQ7PxQoS2QM"><link rel=stylesheet href=https://jarijaas.github.io/css/default-dark.css><script type=application/ld+json>{"@context":"http://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https:\/\/jarijaas.github.io\/"},"articleSection":"posts","name":"Solving the Disobey 2020 puzzle bootloader using Unicorn and Ghidra","headline":"Solving the Disobey 2020 puzzle bootloader using Unicorn and Ghidra","description":"","inLanguage":"en-US","author":"","creator":"","publisher":"","accountablePerson":"","copyrightHolder":"","copyrightYear":"2019","datePublished":"2019-12-24 00:00:00 \x2b0000 UTC","dateModified":"2019-12-24 00:00:00 \x2b0000 UTC","url":"https:\/\/jarijaas.github.io\/posts\/disobey-2020\/","wordCount":"1181","keywords":["Disobey","2020","reversing","Blog"]}</script><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-154923689-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script><title>Solving the Disobey 2020 puzzle bootloader using Unicorn and Ghidra</title></head><body><div class=main><header><div class=header-bar><nav><div class=siteTitle><a href=https://jarijaas.github.io/>CTF writeups</a></div></nav><div class=social-links-header></div></div></header><article class=post><h1 class=title>Solving the Disobey 2020 puzzle bootloader using Unicorn and Ghidra</h1><div class=content><p>This challenge was part of the <a href=https://disobey2020.github.io/>Disobey 2020 puzzle</a>. Full write up has been written by <a href=https://blog.dfir.fi/general/tools/2019/12/23/disobey-writeup.html>whois</a>.
+This write up is about solving the reverse engineering
+challenge using Unicorn and Ghidra.
+If you wish to know
+how this has been done using radare2
+check out the write up by <a href=https://vldha.blogspot.com/2019/12/r2.html>Petteri</a>.</p><p>The boot sector is a Master Boot Record (MBR).
+This can be figured out easily
+by searching for the boot signature (0x55 0xAA) at file offset 0x1FE.</p><p>First, let's take a quick look
+at the bootloader using Ghidra.
+Because the CPU is in real mode,
+we have to select the
+&ldquo;x86 real mode 16-bit&rdquo; as the language:
+<img src=./img/ghidra_language.png alt></p><p>MBR entrypoint
+is at address 0x7C00.
+The memory block
+has to be moved manually:
+<img src=./img/ghidra_mem.png alt>
+Also, instructions have to be disassembled
+manually.</p><p>At first, the bootloader checks that the CPU manufacturer
+ID &ldquo;CX&rdquo; register contains &ldquo;nt&rdquo;,
+i.e. that the manufacturer ID is &ldquo;GenuineIntel&rdquo;.´
+If the CPU is not intel it halts (0x7c56).</p><p>After that, before jumping to 0x7cb5 it patches the
+corresponding instruction to &ldquo;INT 0x13&rdquo;,
+which is used to
+load the data located after
+the MBR to the memory.</p><p><img src=./img/code_1-0.png alt>
+<img src=./img/code_1-1.png alt></p><p>At 0x7e5d, the CPU changes
+from real 16-bit to protective 32-bit mode,
+by setting the Protection Enable (PE) bit in the CR0 register.
+Because of the mode change
+sequential instructions are displayed incorrectly.
+For now, let's continue the analysis using Unicorn.</p><p><img src=./img/cpu-change-mode.png alt></p><p><a href=https://github.com/trustedsec/unicorn>Unicorn</a> is a CPU emulator
+framework based on <a href=https://www.qemu.org/>QEMU</a>, that has bindings for various languages, such as Python. At first Unicorn and Capstone are initialized. Capstone is used to disasm instructions.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:2;-o-tab-size:2;tab-size:2><code class=language-python data-lang=python>md <span style=color:#f92672>=</span> Cs(CS_ARCH_X86, CS_MODE_16)  <span style=color:#75715e># Capstone</span>
+mu <span style=color:#f92672>=</span> Uc(UC_ARCH_X86, UC_MODE_16)  <span style=color:#75715e># Unicorn</span>
+
+md<span style=color:#f92672>.</span>detail <span style=color:#f92672>=</span> True
+</code></pre></div><p>To execute the bootloader
+correctly, the MBR is
+mapped to 0x7c00 and
+0x10000 bytes of memory are allocated.
+Processing interrupts
+and tracking execution
+is done using <code>UC_HOOK_INTR</code>
+and <code>UC_HOOK_CODE</code> hooks.
+The emulator stops
+after executing the defined amount of instructions
+and the memory is dumped to
+disk for further analysis in Ghidra.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:2;-o-tab-size:2;tab-size:2><code class=language-python data-lang=python><span style=color:#66d9ef>if</span> __name__ <span style=color:#f92672>==</span> <span style=color:#e6db74></span><span style=color:#e6db74>&#34;</span><span style=color:#e6db74>__main__</span><span style=color:#e6db74>&#34;</span>:
+
+    <span style=color:#66d9ef>with</span> open(<span style=color:#e6db74></span><span style=color:#e6db74>&#34;</span><span style=color:#e6db74>bootloader.bin</span><span style=color:#e6db74>&#34;</span>, <span style=color:#e6db74></span><span style=color:#e6db74>&#34;</span><span style=color:#e6db74>rb</span><span style=color:#e6db74>&#34;</span>) <span style=color:#66d9ef>as</span> f:
+        file_data <span style=color:#f92672>=</span> f<span style=color:#f92672>.</span>read()
+
+    img_base <span style=color:#f92672>=</span> <span style=color:#ae81ff>0x7c00</span>
+    entry_point <span style=color:#f92672>=</span> img_base
+
+    <span style=color:#66d9ef>try</span>:
+        <span style=color:#75715e># Initialize CPU emulator</span>
+        <span style=color:#75715e># Write image to the emulator&#39;s memory</span>
+        mem_size <span style=color:#f92672>=</span> <span style=color:#ae81ff>0x10000</span>
+        mu<span style=color:#f92672>.</span>mem_map(<span style=color:#ae81ff>0</span>,  mem_size)
+
+        mu<span style=color:#f92672>.</span>mem_<span style=color:#f92672>+</span>write(img_base, file_data[<span style=color:#ae81ff>0</span>:<span style=color:#ae81ff>512</span>])  <span style=color:#75715e># Write MBR</span>
+
+        <span style=color:#75715e># Set hooks</span>
+        mu<span style=color:#f92672>.</span>hook_add(UC_HOOK_CODE, hook_code)
+        mu<span style=color:#f92672>.</span>hook_add(UC_HOOK_INTR, hook_intr)
+
+        <span style=color:#75715e># Exec 100000 instructions</span>
+        mu<span style=color:#f92672>.</span>emu_start(entry_point, <span style=color:#ae81ff>0</span>, count<span style=color:#f92672>=</span><span style=color:#ae81ff>100000</span>)
+        <span style=color:#66d9ef>print</span>(<span style=color:#e6db74></span><span style=color:#e6db74>&#34;</span><span style=color:#e6db74>Emulation done</span><span style=color:#e6db74>&#34;</span>)
+
+    <span style=color:#66d9ef>except</span> UcError <span style=color:#66d9ef>as</span> e:
+        <span style=color:#66d9ef>print</span>(<span style=color:#e6db74></span><span style=color:#e6db74>&#34;</span><span style=color:#e6db74>ERROR: </span><span style=color:#e6db74>%s</span><span style=color:#e6db74>&#34;</span> <span style=color:#f92672>%</span> e)
+
+    dump_memory(<span style=color:#ae81ff>0</span>, mem_size, <span style=color:#e6db74></span><span style=color:#e6db74>&#34;</span><span style=color:#e6db74>./bootloader_mem_dump.bin</span><span style=color:#e6db74>&#34;</span>)
+</code></pre></div><p>The following code
+processes the
+interrupts used to print
+characters and to read from the disk:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:2;-o-tab-size:2;tab-size:2><code class=language-python data-lang=python><span style=color:#66d9ef>def</span> <span style=color:#a6e22e>hook_intr</span>(mu, intno, user_data):
+    <span style=color:#66d9ef>global</span> mu_stdout
+
+    ah <span style=color:#f92672>=</span> mu<span style=color:#f92672>.</span>reg_read(UC_X86_REG_AH)
+    al <span style=color:#f92672>=</span> mu<span style=color:#f92672>.</span>reg_read(UC_X86_REG_AL)
+    dh <span style=color:#f92672>=</span> mu<span style=color:#f92672>.</span>reg_read(UC_X86_REG_DH)
+    dl <span style=color:#f92672>=</span> mu<span style=color:#f92672>.</span>reg_read(UC_X86_REG_DL)
+    cl <span style=color:#f92672>=</span> mu<span style=color:#f92672>.</span>reg_read(UC_X86_REG_CL)
+    ch <span style=color:#f92672>=</span> mu<span style=color:#f92672>.</span>reg_read(UC_X86_REG_CH)
+    es <span style=color:#f92672>=</span> mu<span style=color:#f92672>.</span>reg_read(UC_X86_REG_ES)
+    bx <span style=color:#f92672>=</span> mu<span style=color:#f92672>.</span>reg_read(UC_X86_REG_BX)
+
+    <span style=color:#66d9ef>if</span> intno <span style=color:#f92672>==</span> INT_PRINT:
+        char_addr <span style=color:#f92672>=</span> mu<span style=color:#f92672>.</span>reg_read(UC_X86_REG_SI)
+        <span style=color:#66d9ef>if</span> ah <span style=color:#f92672>==</span> <span style=color:#ae81ff>0x0e</span>:  <span style=color:#75715e># print char</span>
+            mu_stdout <span style=color:#f92672>+</span><span style=color:#f92672>=</span> mu<span style=color:#f92672>.</span>mem_read(char_addr <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>, <span style=color:#ae81ff>1</span>)
+    <span style=color:#66d9ef>elif</span> intno <span style=color:#f92672>==</span> INT_DISK:
+        <span style=color:#66d9ef>if</span> ah <span style=color:#f92672>==</span> READ_SECTORS:
+            n_sectors <span style=color:#f92672>=</span> al
+            head <span style=color:#f92672>=</span> dh
+            drive <span style=color:#f92672>=</span> dl
+            sector <span style=color:#f92672>=</span> cl
+            cylinder <span style=color:#f92672>=</span> ch
+
+            lba_start <span style=color:#f92672>=</span> (cylinder <span style=color:#f92672>*</span> <span style=color:#ae81ff>16</span> <span style=color:#f92672>+</span> head) <span style=color:#f92672>*</span> <span style=color:#ae81ff>63</span> <span style=color:#f92672>+</span> (sector <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>)
+            lba_end <span style=color:#f92672>=</span> (cylinder <span style=color:#f92672>*</span> <span style=color:#ae81ff>16</span> <span style=color:#f92672>+</span> head) <span style=color:#f92672>*</span> <span style=color:#ae81ff>63</span> <span style=color:#f92672>+</span> ((sector <span style=color:#f92672>+</span> n_sectors) <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>)
+
+            start_offset <span style=color:#f92672>=</span> lba_start <span style=color:#f92672>*</span> <span style=color:#ae81ff>512</span>
+            end_offset <span style=color:#f92672>=</span> lba_end <span style=color:#f92672>*</span> <span style=color:#ae81ff>512</span>
+
+            <span style=color:#75715e># Write results</span>
+            data <span style=color:#f92672>=</span> file_data[start_offset:end_offset]
+            mu<span style=color:#f92672>.</span>mem_write(bx, data)
+
+            mu<span style=color:#f92672>.</span>reg_write(UC_X86_REG_AL, <span style=color:#ae81ff>0</span>)
+            mu<span style=color:#f92672>.</span>reg_write(UC_X86_REG_AH, <span style=color:#ae81ff>0</span>)
+
+            eflags <span style=color:#f92672>=</span> mu<span style=color:#f92672>.</span>reg_read(UC_X86_REG_EFLAGS)
+            mu<span style=color:#f92672>.</span>reg_write(UC_X86_REG_EFLAGS, eflags <span style=color:#f92672>&amp;</span> <span style=color:#f92672>~</span>(<span style=color:#ae81ff>1</span> <span style=color:#f92672>&lt;&lt;</span> <span style=color:#ae81ff>0</span>))
+    <span style=color:#66d9ef>else</span>:
+        <span style=color:#66d9ef>print</span>(<span style=color:#e6db74></span><span style=color:#e6db74>&#34;</span><span style=color:#e6db74>Unknown interrupt no: </span><span style=color:#e6db74>%x</span><span style=color:#e6db74>h</span><span style=color:#e6db74>&#34;</span> <span style=color:#f92672>%</span> intno)
+        <span style=color:#66d9ef>print</span>(<span style=color:#e6db74></span><span style=color:#e6db74>&#34;</span><span style=color:#e6db74>Stop emulator</span><span style=color:#e6db74>&#34;</span>)
+        mu<span style=color:#f92672>.</span>emu_stop()
+</code></pre></div><p>The following code is used to
+spoof the CPUID and to switch
+from real mode to protective mode.
+The address where to switch modes
+is simply hardcoded.
+Executed instructions are
+printed to make the analysis easier.</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:2;-o-tab-size:2;tab-size:2><code class=language-python data-lang=python><span style=color:#66d9ef>def</span> <span style=color:#a6e22e>track_code</span>(mu, address, size, user_data):
+    <span style=color:#66d9ef>global</span> md
+
+    code <span style=color:#f92672>=</span> mu<span style=color:#f92672>.</span>mem_read(address, size)
+    insns <span style=color:#f92672>=</span> list(md<span style=color:#f92672>.</span>disasm(
+        bytes(code), address, count<span style=color:#f92672>=</span><span style=color:#ae81ff>1</span>))
+
+    <span style=color:#66d9ef>if</span> len(insns) <span style=color:#f92672>==</span> <span style=color:#ae81ff>0</span>:
+        <span style=color:#66d9ef>print</span>(<span style=color:#e6db74></span><span style=color:#e6db74>&#34;</span><span style=color:#e6db74>Could not decode ins at 0x</span><span style=color:#e6db74>%x</span><span style=color:#e6db74>&#34;</span> <span style=color:#f92672>%</span> address)
+        <span style=color:#66d9ef>return</span>
+
+    insn <span style=color:#f92672>=</span> insns[<span style=color:#ae81ff>0</span>]
+    address <span style=color:#f92672>=</span> insn<span style=color:#f92672>.</span>address
+    size <span style=color:#f92672>=</span> insn<span style=color:#f92672>.</span>size
+    mnemonic <span style=color:#f92672>=</span> insn<span style=color:#f92672>.</span>mnemonic
+    op_str <span style=color:#f92672>=</span> insn<span style=color:#f92672>.</span>op_str
+
+    <span style=color:#66d9ef>print</span>(<span style=color:#e6db74></span><span style=color:#e6db74>&#34;</span><span style=color:#e6db74>0x</span><span style=color:#e6db74>%x</span><span style=color:#e6db74>:</span><span style=color:#ae81ff>\t</span><span style=color:#e6db74>%s</span><span style=color:#ae81ff>\t</span><span style=color:#e6db74>%s</span><span style=color:#ae81ff>\t</span><span style=color:#e6db74>Bytes: </span><span style=color:#e6db74>%s</span><span style=color:#ae81ff>\t</span><span style=color:#e6db74>BP: </span><span style=color:#e6db74>%x</span><span style=color:#e6db74>, BX: </span><span style=color:#e6db74>%x</span><span style=color:#e6db74>, CX: </span><span style=color:#e6db74>%x</span><span style=color:#e6db74>, DX: </span><span style=color:#e6db74>%x</span><span style=color:#e6db74>, EAX: </span><span style=color:#e6db74>%x</span><span style=color:#e6db74>, ESI: </span><span style=color:#e6db74>%x</span><span style=color:#e6db74>, EDI: </span><span style=color:#e6db74>%x</span><span style=color:#e6db74>, CR0: </span><span style=color:#e6db74>%x</span><span style=color:#e6db74>&#34;</span> <span style=color:#f92672>%</span>
+          (address, mnemonic, op_str, <span style=color:#e6db74></span><span style=color:#e6db74>&#39;</span><span style=color:#e6db74>&#39;</span><span style=color:#f92672>.</span>join(<span style=color:#e6db74></span><span style=color:#e6db74>&#39;</span><span style=color:#e6db74>{:02x}</span><span style=color:#e6db74>&#39;</span><span style=color:#f92672>.</span>format(x) <span style=color:#66d9ef>for</span> x <span style=color:#f92672>in</span> code[:size]), mu<span style=color:#f92672>.</span>reg_read(UC_X86_REG_BP),
+           mu<span style=color:#f92672>.</span>reg_read(UC_X86_REG_BX), mu<span style=color:#f92672>.</span>reg_read(
+               UC_X86_REG_CX), mu<span style=color:#f92672>.</span>reg_read(UC_X86_REG_DX),
+           mu<span style=color:#f92672>.</span>reg_read(UC_X86_REG_EAX), mu<span style=color:#f92672>.</span>reg_read(
+               UC_X86_REG_ESI), mu<span style=color:#f92672>.</span>reg_read(UC_X86_REG_EDI),
+           mu<span style=color:#f92672>.</span>reg_read(UC_X86_REG_CR0)))
+
+    <span style=color:#66d9ef>if</span> (mnemonic <span style=color:#f92672>==</span> <span style=color:#e6db74></span><span style=color:#e6db74>&#34;</span><span style=color:#e6db74>cpuid</span><span style=color:#e6db74>&#34;</span>):
+        mu<span style=color:#f92672>.</span>reg_write(UC_X86_REG_IP, address <span style=color:#f92672>+</span> size)  <span style=color:#75715e># Jump over</span>
+        mu<span style=color:#f92672>.</span>reg_write(UC_X86_REG_CX, <span style=color:#ae81ff>0x746e</span>)  <span style=color:#75715e># Spoof CPUID</span>
+    <span style=color:#66d9ef>elif</span> (mnemonic <span style=color:#f92672>==</span> <span style=color:#e6db74></span><span style=color:#e6db74>&#34;</span><span style=color:#e6db74>out</span><span style=color:#e6db74>&#34;</span>):
+        io_op <span style=color:#f92672>=</span> insn<span style=color:#f92672>.</span>operands[<span style=color:#ae81ff>0</span>]
+        value_op <span style=color:#f92672>=</span> insn<span style=color:#f92672>.</span>operands[<span style=color:#ae81ff>1</span>]
+        io_addr <span style=color:#f92672>=</span> mu<span style=color:#f92672>.</span>reg_read(io_op<span style=color:#f92672>.</span>reg)
+        value <span style=color:#f92672>=</span> mu<span style=color:#f92672>.</span>reg_read(value_op<span style=color:#f92672>.</span>reg)
+        <span style=color:#66d9ef>print</span>(<span style=color:#e6db74></span><span style=color:#e6db74>&#34;</span><span style=color:#e6db74>io addr: </span><span style=color:#e6db74>%x</span><span style=color:#e6db74>, value: </span><span style=color:#e6db74>%x</span><span style=color:#e6db74>&#34;</span> <span style=color:#f92672>%</span> (io_addr, value))
+
+    <span style=color:#66d9ef>if</span> address <span style=color:#f92672>==</span> <span style=color:#ae81ff>0x7e65</span>:
+        <span style=color:#75715e># Because of switch from 16 bit real mode to 32 bit protect mode</span>
+        md <span style=color:#f92672>=</span> Cs(CS_ARCH_X86, CS_MODE_32)
+        md<span style=color:#f92672>.</span>detail <span style=color:#f92672>=</span> True
+</code></pre></div><p>The bootloader starts to loop indefinitely around 0x3028.
+Let's analyse the memory dump in Ghidra.
+By disassembling the dump
+we can clearly
+see that the code destroyes the data at 0x303F
+by writing 0xFF.</p><p><img src=img/destroy_data.png alt></p><p>So let's dump the memory when the CPU
+reaches 0x3028:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:2;-o-tab-size:2;tab-size:2><code class=language-python data-lang=python><span style=color:#66d9ef>if</span> address <span style=color:#f92672>==</span> <span style=color:#ae81ff>0x3028</span>:
+    mu<span style=color:#f92672>.</span>emu_stop()
+</code></pre></div><p>Now the data is intact, and we
+can see the following strings:
+<img src=img/strings.png alt></p><p>The code seen below
+first outputs the &ldquo;place flag at 0x3000&rdquo;
+string and then begins validating
+the flag bytes.
+We can clearly see that the
+first and seconds bytes of the flag are 0x42.
+<img src=img/flag_check.png alt></p><p>Because instructions
+have to disassembled
+manually using the addresses of executed instructions from Unicorn and Ghidra does not
+find well instruction boundaries with only that information
+Unicorn is used to find the rest of the flag.</p><p>First, change
+the emulator to stop
+when the fail branch has been reached:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:2;-o-tab-size:2;tab-size:2><code class=language-python data-lang=python>mu<span style=color:#f92672>.</span>emu_start(entry_point, <span style=color:#ae81ff>0x3114</span>)
+</code></pre></div><p>and place the known flag bytes
+to 0x3000:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:2;-o-tab-size:2;tab-size:2><code class=language-python data-lang=python><span style=color:#66d9ef>if</span> address <span style=color:#f92672>==</span> <span style=color:#ae81ff>0x304d</span>:
+    mu<span style=color:#f92672>.</span>mem_write(<span style=color:#ae81ff>0x3000</span>, <span style=color:#e6db74>b</span><span style=color:#e6db74>&#39;</span><span style=color:#ae81ff>\x42</span><span style=color:#ae81ff>\x42</span><span style=color:#ae81ff>\x00</span><span style=color:#ae81ff>\x00</span><span style=color:#ae81ff>\x00</span><span style=color:#ae81ff>\x00</span><span style=color:#ae81ff>\x00</span><span style=color:#ae81ff>\x00</span><span style=color:#ae81ff>\x00</span><span style=color:#ae81ff>\x00</span><span style=color:#ae81ff>\x00</span><span style=color:#ae81ff>\x00</span><span style=color:#ae81ff>\x00</span><span style=color:#e6db74>&#39;</span>)
+</code></pre></div><p>Then the flag is calcuted manually:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:2;-o-tab-size:2;tab-size:2><code class=language-txt data-lang=txt>0x308a: mov     ax, word ptr [0x3004]  EAX: 41
+0x3090: add     al, 0x32               EAX: 0
+0x3092: cmp     al, 0x7b               EAX: 32
+0x3094: jne     0x3114                 EAX: 32
+</code></pre></div><p>al + 0x32 = 0x7b => 0x49</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:2;-o-tab-size:2;tab-size:2><code class=language-txt data-lang=txt>0x3096: jmp     0x309d      EAX: ff7b
+0x309d: sub     ah, 0x20    EAX: ff7b
+0x30a0: cmp     ah, 0x54    EAX: df7b
+0x30a3: jne     0x3114      EAX: df7b
+</code></pre></div><p>ah - 0x20 = 0x54 => 0x74</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:2;-o-tab-size:2;tab-size:2><code class=language-txt data-lang=txt>0x30a5: mov     ax, word ptr [0x3002]  BX: 7e00, EAX: 547b
+0x30ab: push    ax                     BX: 7e00, EAX: 0
+0x30ad: pop     bx                     BX: 7e00, EAX: 0
+0x30af: and     ax, 0xf0f              BX: 0, EAX: 0
+0x30b3: cmp     ax, 0x202              BX: 0, EAX: 0
+0x30b7: jne     0x3114                 BX: 0, EAX: 0
+</code></pre></div><p>(ax & 0xf0f) == 0x202</p><p>ax & 0xf = 0x2</p><p>(ax &#187; 16) = 0x2</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:2;-o-tab-size:2;tab-size:2><code class=language-txt data-lang=txt>0x30b7: jne     0x3114      BX: 202, EAX: 202
+0x30b9: xor     bx, 0x202   BX: 202, EAX: 202
+0x30be: cmp     bx, 0x4040  BX: 0, EAX: 202
+0x30c3: jne     0x3114      BX: 0, EAX: 202
+</code></pre></div><p>bx = ax
+(bx & 0xf0) = 4
+(bx &#187; 16) & 0xf0 = 4</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:2;-o-tab-size:2;tab-size:2><code class=language-txt data-lang=txt>0x30d1: mov     eax, dword ptr [0x3006] EAX: 202
+0x30d6: inc     al                      EAX: 0
+0x30d8: jne     0x30de                  EAX: 1
+0x30de: cmp     al, 0x47                EAX: 1
+0x30e0: jne     0x3114                  EAX: 1
+</code></pre></div><p>1 + al = 0x47 => 0x46</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:2;-o-tab-size:2;tab-size:2><code class=language-txt data-lang=txt>0x30de: cmp     al, 0x47     EAX: 47
+0x30e0: jne     0x3114       EAX: 47
+0x30e2: shr     eax, 8       EAX: 47
+0x30e5: cmp     al, 0x47     EAX: 0
+0x30e7: je      0x3114       EAX: 0
+0x30e9: cmp     al, 0x69     EAX: 0
+0x30eb: je      0x30f1       EAX: 0
+</code></pre></div><p>eax = 0x00000047
+(eax &#187; 8) == 0x69</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:2;-o-tab-size:2;tab-size:2><code class=language-txt data-lang=txt>0x30eb: je      0x30f1      EAX: 69
+0x30f1: shr     eax, 8      EAX: 69
+0x30f4: cmp     ax, 0x7374  EAX: 0
+0x30f8: jne     0x3114      EAX: 0
+</code></pre></div><p>ax = 0x7374</p><p>Finally, the flag is <code>\x42\x42\x42\x42\x49\x74\x46\x69\x74\x73</code> = <code>BBBBItFits</code></p></div><footer class=post-footer><div class=post-footer-data><div class=tags><div class=tag><a href=https://jarijaas.github.io/tags/disobey>#Disobey</a></div><div class=tag><a href=https://jarijaas.github.io/tags/2020>#2020</a></div><div class=tag><a href=https://jarijaas.github.io/tags/reversing>#reversing</a></div></div><div class=date>24 Dec 2019</div></div></footer><script src=https://utteranc.es/client.js repo=Jarijaas/jarijaas.github.io issue-term=pathname theme=dark-blue crossorigin=anonymous async></script></article><footer><div class=social-links-footer><div class=social-link><a href=https://jarijaas.github.io/index.xml target=_blank>RSS</a></div></div><div class=copyright></div><div class=poweredby>Powered by <a href=https://gohugo.io/>Hugo</a>.</div></footer></div></body></html>
